@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PocketBase Real-Time Chat</title>
+    <script src="https://unpkg.com/pocketbase@0.21.1/dist/pocketbase.umd.js"></script>
+  </head>
+  <body>
+    <div
+      id="chat-window"
+      style="
+        height: 300px;
+        overflow-y: scroll;
+        border: 1px solid #ccc;
+        padding: 10px;
+      "
+    ></div>
+    <form id="message-form">
+      <input
+        type="text"
+        id="message-input"
+        placeholder="Type your message..."
+      />
+      <button type="submit">Send</button>
+    </form>
+
+    <script>
+      const pb = new PocketBase("http://127.0.0.1:8090");
+
+      const chatWindow = document.getElementById("chat-window");
+      const messageForm = document.getElementById("message-form");
+      const messageInput = document.getElementById("message-input");
+
+      function addMessageToChat(message) {
+        const messageElement = document.createElement("div");
+        messageElement.textContent = `${message.user}: ${message.content}`;
+        chatWindow.appendChild(messageElement);
+
+        // Create details-summary accordion for thought_process
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "Thought Process";
+        details.appendChild(summary);
+
+        const thoughtProcess = document.createElement("p");
+        thoughtProcess.textContent = message.thought_process;
+        details.appendChild(thoughtProcess);
+
+        chatWindow.appendChild(details);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        const answerElement = document.createElement("div");
+
+        answerElement.textContent = `AI answer: ${message.answer}`;
+        chatWindow.appendChild(answerElement);
+      }
+
+      // Load existing messages
+      async function loadMessages() {
+        const records = await pb.collection("messages").getList(1, 50, {
+          sort: "created",
+        });
+        records.items.forEach(addMessageToChat);
+      }
+
+      // Subscribe to real-time updates
+      pb.collection("messages").subscribe("*", function (e) {
+        if (e.action === "create") {
+          addMessageToChat(e.record);
+        }
+      });
+
+      // Send a new message
+      messageForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const content = messageInput.value.trim();
+        if (content) {
+          try {
+            await pb.collection("messages").create({
+              user: "User", // Replace with actual user name or ID
+              content: content,
+            });
+            messageInput.value = "";
+          } catch (error) {
+            console.error("Error sending message:", error);
+          }
+        }
+      });
+
+      // Initial load of messages
+      loadMessages();
+    </script>
+  </body>
+</html>

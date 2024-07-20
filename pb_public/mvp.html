@@ -1,0 +1,46 @@
+<button id="CVM">Create VM</button>
+<button id="DVM">Delete VM</button>
+<div id="data">data</div>
+<script src="/pocketbase.umd.js"></script>
+<script>
+  const pb = new PocketBase("[URL]");
+  document.getElementById("CVM").addEventListener("click", create_vm_handler);
+  document.getElementById("DVM").addEventListener("click", delete_vm_handler);
+
+  async function testPB() {
+    const authData = await pb
+      .collection("users")
+      .authWithPassword("[USEREMAIL]", "[PASSWORD]");
+
+    const element = document.getElementById("data");
+    element.innerHTML = pb.authStore.model.id;
+  }
+  async function create_vm_handler() {
+    // Your code to create a VM goes here
+    console.log("Create VM button clicked");
+    insertVmAttempt(pb.authStore.token.toString());
+  }
+  async function insertVmAttempt(authToken) {
+    const collectionName = "vm_attempt";
+    const data = {
+      initiator_user_id: pb.authStore.model.id,
+    };
+
+    // Insert the document into the collection
+    pb.collection(collectionName)
+      .create(data)
+      .then((response) => {
+        console.log(
+          `Document inserted successfully for user ID ${data.initiator_user_id}`
+        );
+      })
+      .catch((error) => {
+        console.error(`Error inserting document: ${error.message}`);
+      });
+  }
+  async function delete_vm_handler() {
+    // Your code to delete a VM goes here
+    console.log("Delete VM button clicked");
+  }
+  testPB();
+</script>
