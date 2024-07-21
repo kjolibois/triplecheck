@@ -5,6 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PocketBase Real-Time Chat</title>
     <script src="https://unpkg.com/pocketbase@0.21.1/dist/pocketbase.umd.js"></script>
+    <style>
+      .ai-thinking .ellipsis {
+        animation: ellipsis 1.5s infinite;
+      }
+      .ai-thinking::after {
+        content: "";
+        animation: ellipsis 1.5s infinite;
+      }
+
+      @keyframes ellipsis {
+        0% {
+          content: "";
+        }
+        25% {
+          content: ".";
+        }
+        50% {
+          content: "..";
+        }
+        75% {
+          content: "...";
+        }
+        100% {
+          content: "";
+        }
+      }
+    </style>
   </head>
   <body>
     <div
@@ -27,32 +54,108 @@
 
     <script>
       const pb = new PocketBase("http://127.0.0.1:8090");
+      const loadedMessages = new Set();
 
       const chatWindow = document.getElementById("chat-window");
       const messageForm = document.getElementById("message-form");
       const messageInput = document.getElementById("message-input");
+      /*
+      function addMessageToChat(message, isUpdate = false) {
+        const messageId = `message-${message.id}`;
+        let messageContainer = document.getElementById(messageId);
 
-      function addMessageToChat(message) {
-        const messageElement = document.createElement("div");
-        messageElement.textContent = `${message.user}: ${message.content}`;
-        chatWindow.appendChild(messageElement);
+        if (!messageContainer) {
+          if (loadedMessages.has(message.id)) {
+            return; // Skip if we've already loaded this message
+          }
+          messageContainer = document.createElement("div");
+          messageContainer.id = messageId;
+          messageContainer.setAttribute("data-message-id", message.id);
+          chatWindow.appendChild(messageContainer);
+          loadedMessages.add(message.id);
+        }
+        if (!isUpdate) {
+          messageContainer.innerHTML = `
+          <div>${message.user}: ${message.content}</div>
+          <div class="ai-thinking">AI is thinking</div>     `;
+        } else {
+          messageContainer.innerHTML = `
+          <div>${message.user}: ${message.content}</div>
+          <details>
+            <summary>Thought Process</summary>
+            <p>${message.thought_process}</p>
+          </details>
+          <div>AI answer: ${message.answer}</div>
+        `;
+        }
+        if (isUpdate) {
+          messageContainer.classList.add("updated");
+          setTimeout(() => messageContainer.classList.remove("updated"), 2000);
+        }
 
-        // Create details-summary accordion for thought_process
-        const details = document.createElement("details");
-        const summary = document.createElement("summary");
-        summary.textContent = "Thought Process";
-        details.appendChild(summary);
-
-        const thoughtProcess = document.createElement("p");
-        thoughtProcess.textContent = message.thought_process;
-        details.appendChild(thoughtProcess);
-
-        chatWindow.appendChild(details);
         chatWindow.scrollTop = chatWindow.scrollHeight;
-        const answerElement = document.createElement("div");
+      }
+*/
+      const MessageState = {
+        CREATE: "create",
+        INITIAL_LOAD: "initialLoad",
+        UPDATE: "update",
+      };
 
-        answerElement.textContent = `AI answer: ${message.answer}`;
-        chatWindow.appendChild(answerElement);
+      function addMessageToChat(message, state = MessageState.CREATE) {
+        const messageId = `message-${message.id}`;
+        let messageContainer = document.getElementById(messageId);
+        console.log(state);
+        if (!messageContainer) {
+          messageContainer = document.createElement("div");
+          messageContainer.id = messageId;
+          messageContainer.setAttribute("data-message-id", message.id);
+          chatWindow.appendChild(messageContainer);
+          loadedMessages.add(message.id);
+        }
+
+        let content = `<div>${message.user}: ${message.content}</div>`;
+
+        switch (state) {
+          case MessageState.CREATE:
+            content += `<div class="ai-thinking">AI is thinking<span class="ellipsis"></span></div>`;
+            break;
+          case MessageState.INITIAL_LOAD:
+          case MessageState.UPDATE:
+            content += `
+        <details>
+          <summary>Thought Process</summary>
+          <p>${message.thought_process}</p>
+        </details>
+        <div>AI answer: ${message.answer}</div>
+      `;
+            break;
+        }
+
+        messageContainer.innerHTML = content;
+
+        if (state === MessageState.UPDATE) {
+          messageContainer.classList.add("updated");
+          setTimeout(() => messageContainer.classList.remove("updated"), 2000);
+        }
+
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+      }
+
+      // Subscribe to real-time updates
+      pb.collection("messages").subscribe("*", function (e) {
+        if (e.action === "create") {
+          addMessageToChat(e.record, MessageState.CREATE);
+        } else if (e.action === "update") {
+          addMessageToChat(e.record, MessageState.UPDATE);
+        }
+      });
+
+      // For initial load of messages
+      function loadInitialMessages(messages) {
+        messages.forEach((message) =>
+          addMessageToChat(message, MessageState["INITIAL_LOAD"])
+        );
       }
 
       // Load existing messages
@@ -61,14 +164,10 @@
           sort: "created",
         });
         records.items.forEach(addMessageToChat);
+        records.items.forEach(function (item) {
+          addMessageToChat(item, MessageState["INITIAL_LOAD"]);
+        });
       }
-
-      // Subscribe to real-time updates
-      pb.collection("messages").subscribe("*", function (e) {
-        if (e.action === "create") {
-          addMessageToChat(e.record);
-        }
-      });
 
       // Send a new message
       messageForm.addEventListener("submit", async function (e) {
